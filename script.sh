@@ -1,5 +1,5 @@
 #!/bin/bash
-VERSION="0.3.0"
+VERSION="0.3.1"
 
 # --- COLORS & STYLING ---
 RED='\033[0;31m'
@@ -232,7 +232,10 @@ for pkg in "${!INSTALL_LIST[@]}"; do
     elif [ -f "data.tar.gz" ]; then ARCHIVE="data.tar.gz"; 
     else error "Bad .deb format (no data.tar)"; fi
 
-    tar -xf "$ARCHIVE" -C /
+    # OVERWRITE DIRECTLY TO /
+    # Suppress permission/ownership errors as requested
+    tar -xf "$ARCHIVE" -C / --no-same-owner -m 2>/dev/null
+    
     rm -f "$DEB_NAME" "$ARCHIVE" control.tar.* debian-binary
     success "Installed $pkg"
 done
