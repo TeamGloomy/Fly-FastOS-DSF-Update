@@ -1,5 +1,5 @@
 #!/bin/bash
-VERSION="0.5.1"
+VERSION="0.5.2"
 
 # --- COLORS & STYLING ---
 RED='\033[0;31m'
@@ -186,20 +186,7 @@ done
 info "Channel: ${BOLD}$CHANNEL${RESET}"
 info "URL:     $TARGET_URL"
 
-# --- 1. SYSTEM PREP ---
-header "System Preparation"
-
-# BACKUP CONFIGURATION BEFORE STOPPING SERVICES
-backup_config
-
-info "Stopping services..."
-systemctl stop duetcontrolserver duetwebserver duetpluginservice duetruntime 2>/dev/null
-
-info "Reloading Daemon..."
-systemctl daemon-reload
-
-info "Remounting Filesystem as Read/Write..."
-mount -o remount,rw / || error "Failed to remount / as RW. Cannot proceed."
+info "URL:     $TARGET_URL"
 
 # --- 2. FETCH PACKAGE INDEX ---
 header "Fetching Packages"
@@ -278,6 +265,21 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
     info "Update cancelled by user."
     exit 0
 fi
+
+# --- 1. SYSTEM PREP ---
+header "System Preparation"
+
+# BACKUP CONFIGURATION BEFORE STOPPING SERVICES
+backup_config
+
+info "Stopping services..."
+systemctl stop duetcontrolserver duetwebserver duetpluginservice duetruntime 2>/dev/null
+
+info "Reloading Daemon..."
+systemctl daemon-reload
+
+info "Remounting Filesystem as Read/Write..."
+mount -o remount,rw / || error "Failed to remount / as RW. Cannot proceed."
 
 # --- 5. EXECUTION ---
 header "Installing Updates"
