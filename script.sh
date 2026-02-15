@@ -1,4 +1,59 @@
 #!/bin/bash
+VERSION="0.1.0"
+
+# Self-update configuration
+SCRIPT_URL="https://raw.githubusercontent.com/TeamGloomy/Fly-FastOS-DSF-Update/main/script.sh"
+SCRIPT_LOCATION="${BASH_SOURCE[@]}"
+SELF_UPDATER_SCRIPT="/tmp/fly_fastos_selfupdater.sh"
+
+self_update() {
+    # Delete previous self-updater script if any
+    rm -f "$SELF_UPDATER_SCRIPT"
+
+    TMP_FILE=$(mktemp -p "" "XXXXX.sh")
+    
+    # Download new script
+    if wget -q "$SCRIPT_URL" -O "$TMP_FILE"; then
+        # Extract new version
+        NEW_VER=$(grep "^VERSION" "$TMP_FILE" | awk -F'[="]' '{print $3}')
+        
+        # Check if version was found
+        if [ -z "$NEW_VER" ]; then
+            echo "⚠️  Could not detect version in remote script. Skipping update."
+            rm -f "$TMP_FILE"
+            return
+        fi
+
+        ABS_SCRIPT_PATH=$(readlink -f "$SCRIPT_LOCATION")
+        
+        # Compare versions
+        if [ "$VERSION" \< "$NEW_VER" ]; then
+            printf "Updating script \e[31;1m%s\e[0m -> \e[32;1m%s\e[0m\n" "$VERSION" "$NEW_VER"
+
+            # Create transient updater script
+            echo "#!/bin/bash" > "$SELF_UPDATER_SCRIPT"
+            echo "cp \"$TMP_FILE\" \"$ABS_SCRIPT_PATH\"" >> "$SELF_UPDATER_SCRIPT"
+            echo "rm -f \"$TMP_FILE\"" >> "$SELF_UPDATER_SCRIPT"
+            echo "echo 'Running updated script...'" >> "$SELF_UPDATER_SCRIPT"
+            echo "exec \"$ABS_SCRIPT_PATH\" \"\$@\"" >> "$SELF_UPDATER_SCRIPT"
+
+            chmod +x "$SELF_UPDATER_SCRIPT"
+            chmod +x "$TMP_FILE"
+            
+            # Execute updater and exit current process
+            exec "$SELF_UPDATER_SCRIPT"
+        else
+            echo "Script is up-to-date ($VERSION). Continuing..."
+            rm -f "$TMP_FILE"
+        fi
+    else
+        echo "⚠️  Failed to check for updates (network issue?). Continuing..."
+        rm -f "$TMP_FILE"
+    fi
+}
+
+self_update "$@"
+
 
 # ==============================================================================
 # FORCE OVERWRITE: CUSTOM URL
