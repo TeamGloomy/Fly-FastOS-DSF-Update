@@ -14,6 +14,13 @@ self_update() {
     
     # Download new script
     if wget -q "$SCRIPT_URL" -O "$TMP_FILE"; then
+        # VALIDATION: Check if it's a valid bash script
+        if ! head -n 1 "$TMP_FILE" | grep -q "^#!/bin/bash"; then
+             echo "⚠️  Downloaded update is not a valid script (likely HTML or network error). Skipping update."
+             rm -f "$TMP_FILE"
+             return
+        fi
+
         # Extract new version
         NEW_VER=$(grep "^VERSION" "$TMP_FILE" | awk -F'[="]' '{print $3}')
         
