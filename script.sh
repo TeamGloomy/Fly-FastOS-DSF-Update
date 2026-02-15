@@ -1,5 +1,5 @@
 #!/bin/bash
-VERSION="0.1.0"
+VERSION="0.2.0"
 
 # Self-update configuration
 SCRIPT_URL="https://raw.githubusercontent.com/TeamGloomy/Fly-FastOS-DSF-Update/main/script.sh"
@@ -64,9 +64,31 @@ self_update "$@"
 # 4. Downloads & Overwrites files.
 # ==============================================================================
 
+echo ""
+echo "=============================================================================="
+echo "   Fly-FastOS DSF Update Script v$VERSION"
+echo "=============================================================================="
+echo ""
+
 # --- CONFIGURATION ---
-# The URL you confirmed is correct
-TARGET_URL="https://pkg.duet3d.com/dists/unstable/armv7/binary-arm64/"
+PS3="Select Release Channel (Enter number): "
+select CHANNEL in "Stable" "Unstable"; do
+    case $CHANNEL in
+        "Stable")
+            TARGET_URL="https://pkg.duet3d.com/dists/stable/armv7/binary-arm64/"
+            break
+            ;;
+        "Unstable")
+            TARGET_URL="https://pkg.duet3d.com/dists/unstable/armv7/binary-arm64/"
+            break
+            ;;
+        *) echo "Invalid selection. Please try again.";;
+    esac
+done
+
+echo "Selected Channel: $CHANNEL"
+echo "Target URL: $TARGET_URL"
+
 PACKAGES_FILE="Packages"
 WORK_DIR="/tmp/dsf_overwrite"
 
