@@ -1,5 +1,5 @@
 #!/bin/bash
-VERSION="0.3.1"
+VERSION="0.4.0"
 
 # --- COLORS & STYLING ---
 RED='\033[0;31m'
@@ -16,6 +16,18 @@ info()    { echo -e "${BLUE}[INFO]${RESET} $1"; }
 success() { echo -e "${GREEN}[OK]${RESET} $1"; }
 warn()    { echo -e "${YELLOW}[WARN]${RESET} $1"; }
 error()   { echo -e "${RED}[ERROR]${RESET} $1"; exit 1; }  # Replaces 'die'
+
+# --- UTILS ---
+get_current_dsf_version() {
+    local deps_file="/opt/dsf/bin/DuetControlServer.deps.json"
+    if [ -f "$deps_file" ]; then
+        # Parse "DuetControlServer/3.6.1": {
+        local ver=$(grep -o '"DuetControlServer/[^"]*"' "$deps_file" | cut -d'/' -f2 | tr -d '"')
+        echo "${ver:-Unknown}"
+    else
+        echo "Not Installed"
+    fi
+}
 
 # --- SELF-UPDATE ---
 SCRIPT_URL="https://raw.githubusercontent.com/TeamGloomy/Fly-FastOS-DSF-Update/main/script.sh"
@@ -79,6 +91,8 @@ self_update() {
 self_update "$@"
 
 # --- BANNER ---
+CURRENT_DSF_VER=$(get_current_dsf_version)
+
 clear
 echo -e "${CYAN}"
 echo "  ______ _                  ______        _    ____   _____ "
@@ -89,6 +103,7 @@ echo " | |    | | |_| | |______| | | | (_| \__ \ |_| |__| |____) |"
 echo " |_|    |_|\__, |          |_|  \__,_|___/\__|\____/|_____/ "
 echo "            __/ |                                           "
 echo "           |___/          DSF Update Utility v${VERSION}"
+echo "                          Installed DSF: ${GREEN}${CURRENT_DSF_VER}${CYAN}"
 echo -e "${RESET}"
 echo ""
 
