@@ -1,5 +1,5 @@
 #!/bin/bash
-VERSION="0.5.0"
+VERSION="0.5.1"
 
 # --- COLORS & STYLING ---
 RED='\033[0;31m'
@@ -161,10 +161,11 @@ header "Configuration"
 echo -e "Select Release Channel:"
 echo -e "  1) ${GREEN}Stable${RESET}   (Recommended)"
 echo -e "  2) ${YELLOW}Unstable${RESET} (Bleeding Edge)"
+echo -e "  3) Exit"
 echo ""
 
 while true; do
-    read -p "Enter choice [1-2]: " choice
+    read -p "Enter choice [1-3]: " choice
     case $choice in
         1)
             CHANNEL="Stable"
@@ -174,6 +175,10 @@ while true; do
             CHANNEL="Unstable"
             TARGET_URL="https://pkg.duet3d.com/dists/unstable/armv7/binary-arm64/"
             break;;
+        3)
+            info "Exiting..."
+            exit 0
+            ;;
         *) echo -e "${RED}Invalid selection.${RESET}";;
     esac
 done
@@ -232,11 +237,15 @@ for val in "${VERSIONS[@]}"; do
     echo -e "  $i) $val"
     ((i++))
 done
+echo -e "  x) Exit"
 echo ""
 
 while true; do
-    read -p "Select version to install [1-${#VERSIONS[@]}]: " v_choice
-    if [[ "$v_choice" =~ ^[0-9]+$ ]] && [ "$v_choice" -ge 1 ] && [ "$v_choice" -le "${#VERSIONS[@]}" ]; then
+    read -p "Select version to install [1-${#VERSIONS[@]} or x]: " v_choice
+    if [[ "$v_choice" =~ ^[xX]$ ]]; then
+         info "Exiting..."
+         exit 0
+    elif [[ "$v_choice" =~ ^[0-9]+$ ]] && [ "$v_choice" -ge 1 ] && [ "$v_choice" -le "${#VERSIONS[@]}" ]; then
          TARGET_VER="${VERSIONS[$((v_choice-1))]}"
          break
     else
@@ -263,9 +272,12 @@ done < Packages
 if [ ${#INSTALL_LIST[@]} -eq 0 ]; then error "No packages found for version $TARGET_VER"; fi
 
 info "Found ${#INSTALL_LIST[@]} packages to overwrite."
-read -p "Proceed with overwrite? [y/N] " -n 1 -r
+read -p "Proceed with overwrite? [y/N to Exit] " -n 1 -r
 echo
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then error "Aborted."; fi
+if [[ ! $REPLY =~ ^[Yy]$ ]]; then 
+    info "Update cancelled by user."
+    exit 0
+fi
 
 # --- 5. EXECUTION ---
 header "Installing Updates"
