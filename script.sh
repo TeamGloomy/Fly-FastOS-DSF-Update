@@ -1,5 +1,5 @@
 #!/bin/bash
-VERSION="0.5.2"
+VERSION="0.5.3"
 
 # --- COLORS & STYLING ---
 RED='\033[0;31m'
@@ -161,11 +161,12 @@ header "Configuration"
 echo -e "Select Release Channel:"
 echo -e "  1) ${GREEN}Stable${RESET}   (Recommended)"
 echo -e "  2) ${YELLOW}Unstable${RESET} (Bleeding Edge)"
-echo -e "  3) Exit"
+echo -e "  3) Restart Services"
+echo -e "  4) Exit"
 echo ""
 
 while true; do
-    read -p "Enter choice [1-3]: " choice
+    read -p "Enter choice [1-4]: " choice
     case $choice in
         1)
             CHANNEL="Stable"
@@ -176,6 +177,13 @@ while true; do
             TARGET_URL="https://pkg.duet3d.com/dists/unstable/armv7/binary-arm64/"
             break;;
         3)
+            header "Restarting Services"
+            info "Restarting DuetControlServer..."
+            systemctl restart duetcontrolserver duetwebserver duetpluginservice
+            check_health
+            exit 0
+            ;;
+        4)
             info "Exiting..."
             exit 0
             ;;
