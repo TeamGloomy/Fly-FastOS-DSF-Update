@@ -1,5 +1,5 @@
 #!/bin/bash
-VERSION="0.2.1"
+VERSION="0.2.2"
 
 # Self-update configuration
 SCRIPT_URL="https://raw.githubusercontent.com/TeamGloomy/Fly-FastOS-DSF-Update/main/script.sh"
@@ -23,7 +23,9 @@ self_update() {
 
         # Extract new version
         # Use tr -d '\r' to remove carriage returns and trim whitespace
-        NEW_VER=$(grep "^VERSION" "$TMP_FILE" | awk -F'[="]' '{print $3}' | tr -d '\r' | xargs)
+        # grep "^VERSION=" to avoid matching VERSIONS array later in the script
+        # cut -d'"' -f2 extracts the value inside quotes
+        NEW_VER=$(grep "^VERSION=" "$TMP_FILE" | head -n 1 | cut -d'"' -f2 | tr -d '\r')
         
         # Check if version was found
         if [ -z "$NEW_VER" ]; then
