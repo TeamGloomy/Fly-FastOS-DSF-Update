@@ -1,5 +1,5 @@
 #!/bin/bash
-VERSION="0.4.1"
+VERSION="0.4.2"
 
 # --- COLORS & STYLING ---
 RED='\033[0;31m'
@@ -38,8 +38,8 @@ self_update() {
     rm -f "$SELF_UPDATER_SCRIPT"
     TMP_FILE=$(mktemp -p "" "XXXXX.sh")
     
-    # Download new script
-    if wget -q "$SCRIPT_URL" -O "$TMP_FILE"; then
+    # Download new script with cache buster
+    if wget -q "${SCRIPT_URL}?t=$(date +%s)" -O "$TMP_FILE"; then
         # Check integrity
         if ! head -n 1 "$TMP_FILE" | grep -q "^#!/bin/bash"; then
              warn "Downloaded update is not a valid script. Skipping update."
