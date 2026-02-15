@@ -1,5 +1,5 @@
 #!/bin/bash
-VERSION="0.4.2"
+VERSION="0.5.0"
 
 # --- COLORS & STYLING ---
 RED='\033[0;31m'
@@ -15,17 +15,62 @@ header()  { echo -e "\n${BOLD}${CYAN}=== $1 ===${RESET}"; }
 info()    { echo -e "${BLUE}[INFO]${RESET} $1"; }
 success() { echo -e "${GREEN}[OK]${RESET} $1"; }
 warn()    { echo -e "${YELLOW}[WARN]${RESET} $1"; }
-error()   { echo -e "${RED}[ERROR]${RESET} $1"; exit 1; }  # Replaces 'die'
+error()   { echo -e "${RED}[ERROR]${RESET} $1"; exit 1; }
 
 # --- UTILS ---
+CONFIG_FILE="/opt/dsf/conf/config.json"
+BACKUP_DIR="/tmp/dsf_backup"
+WORK_DIR="/tmp/dsf_overwrite"
+
 get_current_dsf_version() {
     local deps_file="/opt/dsf/bin/DuetControlServer.deps.json"
     if [ -f "$deps_file" ]; then
-        # Parse "DuetControlServer/3.6.1": {
         local ver=$(grep -o '"DuetControlServer/[^"]*"' "$deps_file" | head -n 1 | cut -d'/' -f2 | tr -d '"')
         echo "${ver:-Unknown}"
     else
         echo "Not Installed"
+    fi
+}
+
+cleanup() {
+    if [ -d "$WORK_DIR" ]; then rm -rf "$WORK_DIR"; fi
+    if [ -d "$BACKUP_DIR" ]; then rm -rf "$BACKUP_DIR"; fi
+}
+trap cleanup EXIT
+
+backup_config() {
+    if [ -f "$CONFIG_FILE" ]; then
+        info "Backing up board configuration..."
+        mkdir -p "$BACKUP_DIR"
+        cp "$CONFIG_FILE" "$BACKUP_DIR/config.json"
+    else
+        warn "No existing configuration found at $CONFIG_FILE"
+    fi
+}
+
+restore_config() {
+    if [ -f "$BACKUP_DIR/config.json" ]; then
+        info "Restoring board configuration..."
+        mkdir -p "$(dirname "$CONFIG_FILE")"
+        cp "$BACKUP_DIR/config.json" "$CONFIG_FILE"
+        if id "dsf" &>/dev/null; then chown dsf:dsf "$CONFIG_FILE" 2>/dev/null; fi
+    fi
+}
+
+check_health() {
+    header "Service Health Check"
+    info "Waiting for services to settle..."
+    sleep 3
+    
+    if systemctl is-active --quiet duetcontrolserver; then
+        success "DuetControlServer is running."
+    else
+        echo -e "${RED}${BOLD}!!! DuetControlServer Failed to Start !!!${RESET}"
+        echo -e "${YELLOW}Last 20 lines of service log:${RESET}"
+        echo "---------------------------------------------------"
+        systemctl status duetcontrolserver -n 20 --no-pager
+        echo "---------------------------------------------------"
+        error "Update completed but service failed to start."
     fi
 }
 
@@ -60,7 +105,6 @@ self_update() {
         
         # Check if up-to-date
         if [ "$VERSION" == "$NEW_VER" ]; then
-             # info "Script is up-to-date ($VERSION)."
              rm -f "$TMP_FILE"
              return
         fi
@@ -109,7 +153,6 @@ echo ""
 
 # --- CONFIGURATION IMPORTS ---
 PACKAGES_FILE="Packages"
-WORK_DIR="/tmp/dsf_overwrite"
 
 if [ "$EUID" -ne 0 ]; then error "Please run as root (sudo)."; fi
 
@@ -140,6 +183,10 @@ info "URL:     $TARGET_URL"
 
 # --- 1. SYSTEM PREP ---
 header "System Preparation"
+
+# BACKUP CONFIGURATION BEFORE STOPPING SERVICES
+backup_config
+
 info "Stopping services..."
 systemctl stop duetcontrolserver duetwebserver duetpluginservice duetruntime 2>/dev/null
 
@@ -257,6 +304,10 @@ done
 
 # --- 6. FINISH ---
 header "Finalizing"
+
+# RESTORE CONFIGURATION
+restore_config
+
 info "Fixing Permissions..."
 if id "dsf" &>/dev/null; then chown -R dsf:dsf /opt/dsf; fi
 chmod +x /opt/dsf/bin/* 2>/dev/null
@@ -266,6 +317,9 @@ sync
 
 info "Restarting Services..."
 systemctl start duetcontrolserver duetwebserver duetpluginservice
+
+# HEALTH CHECK
+check_health
 
 header "Complete"
 success "Fly-FastOS DSF Update Finished Successfully!"
