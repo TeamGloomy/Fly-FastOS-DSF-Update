@@ -1,185 +1,196 @@
 #!/bin/bash
-VERSION="0.2.2"
+VERSION="0.3.0"
 
-# Self-update configuration
+# --- COLORS & STYLING ---
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+RESET='\033[0m'
+
+# --- LOGGING HELPERS ---
+header()  { echo -e "\n${BOLD}${CYAN}=== $1 ===${RESET}"; }
+info()    { echo -e "${BLUE}[INFO]${RESET} $1"; }
+success() { echo -e "${GREEN}[OK]${RESET} $1"; }
+warn()    { echo -e "${YELLOW}[WARN]${RESET} $1"; }
+error()   { echo -e "${RED}[ERROR]${RESET} $1"; exit 1; }  # Replaces 'die'
+
+# --- SELF-UPDATE ---
 SCRIPT_URL="https://raw.githubusercontent.com/TeamGloomy/Fly-FastOS-DSF-Update/main/script.sh"
 SCRIPT_LOCATION="${BASH_SOURCE[@]}"
 SELF_UPDATER_SCRIPT="/tmp/fly_fastos_selfupdater.sh"
 
 self_update() {
-    # Delete previous self-updater script if any
     rm -f "$SELF_UPDATER_SCRIPT"
-
     TMP_FILE=$(mktemp -p "" "XXXXX.sh")
     
     # Download new script
     if wget -q "$SCRIPT_URL" -O "$TMP_FILE"; then
-        # VALIDATION: Check if it's a valid bash script
+        # Check integrity
         if ! head -n 1 "$TMP_FILE" | grep -q "^#!/bin/bash"; then
-             echo "⚠️  Downloaded update is not a valid script (likely HTML or network error). Skipping update."
+             warn "Downloaded update is not a valid script. Skipping update."
              rm -f "$TMP_FILE"
              return
         fi
 
         # Extract new version
-        # Use tr -d '\r' to remove carriage returns and trim whitespace
-        # grep "^VERSION=" to avoid matching VERSIONS array later in the script
-        # cut -d'"' -f2 extracts the value inside quotes
         NEW_VER=$(grep "^VERSION=" "$TMP_FILE" | head -n 1 | cut -d'"' -f2 | tr -d '\r')
         
-        # Check if version was found
         if [ -z "$NEW_VER" ]; then
-            echo "⚠️  Could not detect version in remote script. Skipping update."
+            warn "Could not detect version in remote script. Skipping update."
             rm -f "$TMP_FILE"
             return
         fi
 
         ABS_SCRIPT_PATH=$(readlink -f "$SCRIPT_LOCATION")
         
-        # STRICT CHECK using string equality first
+        # Check if up-to-date
         if [ "$VERSION" == "$NEW_VER" ]; then
-             echo "Script is up-to-date ($VERSION). Continuing..."
+             # info "Script is up-to-date ($VERSION)."
              rm -f "$TMP_FILE"
              return
         fi
 
-        # Compare versions (Remote > Local)
+        # Compare versions
         if [[ "$VERSION" < "$NEW_VER" ]]; then
-            printf "Updating script \e[31;1m%s\e[0m -> \e[32;1m%s\e[0m\n" "$VERSION" "$NEW_VER"
+            echo -e "${BOLD}${YELLOW}Update Available:${RESET} ${RED}$VERSION${RESET} -> ${GREEN}$NEW_VER${RESET}"
+            info "Updating script..."
 
-            # Create transient updater script
             echo "#!/bin/bash" > "$SELF_UPDATER_SCRIPT"
             echo "cp \"$TMP_FILE\" \"$ABS_SCRIPT_PATH\"" >> "$SELF_UPDATER_SCRIPT"
             echo "rm -f \"$TMP_FILE\"" >> "$SELF_UPDATER_SCRIPT"
-            echo "echo 'Running updated script...'" >> "$SELF_UPDATER_SCRIPT"
+            echo "echo -e '${GREEN}[OK] Script updated. Restarting...${RESET}'" >> "$SELF_UPDATER_SCRIPT"
             echo "exec \"$ABS_SCRIPT_PATH\" \"\$@\"" >> "$SELF_UPDATER_SCRIPT"
 
             chmod +x "$SELF_UPDATER_SCRIPT"
             chmod +x "$TMP_FILE"
-            
-            # Execute updater and exit current process
             exec "$SELF_UPDATER_SCRIPT"
         else
-             echo "Remote version ($NEW_VER) is not newer than current ($VERSION). Skipping."
              rm -f "$TMP_FILE"
         fi
     else
-        echo "⚠️  Failed to check for updates (network issue?). Continuing..."
+        warn "Failed to check for updates (network issue?). Continuing..."
         rm -f "$TMP_FILE"
     fi
 }
 
 self_update "$@"
 
-
-# ==============================================================================
-# FORCE OVERWRITE: CUSTOM URL
-# ==============================================================================
-# 1. Stops Services & Reloads Daemon.
-# 2. Remounts Filesystem RW.
-# 3. Downloads Package List from YOUR URL.
-# 4. Downloads & Overwrites files.
-# ==============================================================================
-
-echo ""
-echo "=============================================================================="
-echo "   Fly-FastOS DSF Update Script v$VERSION"
-echo "=============================================================================="
+# --- BANNER ---
+clear
+echo -e "${CYAN}"
+echo "  ______ _                  ______        _    ____   _____ "
+echo " |  ____| |                |  ____|      | |  / __ \ / ____|"
+echo " | |__  | |_   _           | |__ __ _ ___| |_| |  | | (___  "
+echo " |  __| | | | | |  ______  |  __/ _\` / __| __| |  | |\___ \ "
+echo " | |    | | |_| | |______| | | | (_| \__ \ |_| |__| |____) |"
+echo " |_|    |_|\__, |          |_|  \__,_|___/\__|\____/|_____/ "
+echo "            __/ |                                           "
+echo "           |___/          DSF Update Utility v${VERSION}"
+echo -e "${RESET}"
 echo ""
 
-# --- CONFIGURATION ---
-PS3="Select Release Channel (Enter number): "
-select CHANNEL in "Stable" "Unstable"; do
-    case $CHANNEL in
-        "Stable")
-            TARGET_URL="https://pkg.duet3d.com/dists/stable/armv7/binary-arm64/"
-            break
-            ;;
-        "Unstable")
-            TARGET_URL="https://pkg.duet3d.com/dists/unstable/armv7/binary-arm64/"
-            break
-            ;;
-        *) echo "Invalid selection. Please try again.";;
-    esac
-done
-
-echo "Selected Channel: $CHANNEL"
-echo "Target URL: $TARGET_URL"
-
+# --- CONFIGURATION IMPORTS ---
 PACKAGES_FILE="Packages"
 WORK_DIR="/tmp/dsf_overwrite"
 
-# --- UTILS ---
-die() { echo -e "❌ \033[1;31m$1\033[0m"; exit 1; }
-status() { echo -e "🔹 \033[1;34m$1\033[0m"; }
+if [ "$EUID" -ne 0 ]; then error "Please run as root (sudo)."; fi
 
-if [ "$EUID" -ne 0 ]; then die "Please run as root (sudo)."; fi
+# --- USER SELECTION ---
+header "Configuration"
+echo -e "Select Release Channel:"
+echo -e "  1) ${GREEN}Stable${RESET}   (Recommended)"
+echo -e "  2) ${YELLOW}Unstable${RESET} (Bleeding Edge)"
+echo ""
+
+while true; do
+    read -p "Enter choice [1-2]: " choice
+    case $choice in
+        1)
+            CHANNEL="Stable"
+            TARGET_URL="https://pkg.duet3d.com/dists/stable/armv7/binary-arm64/"
+            break;;
+        2)
+            CHANNEL="Unstable"
+            TARGET_URL="https://pkg.duet3d.com/dists/unstable/armv7/binary-arm64/"
+            break;;
+        *) echo -e "${RED}Invalid selection.${RESET}";;
+    esac
+done
+
+info "Channel: ${BOLD}$CHANNEL${RESET}"
+info "URL:     $TARGET_URL"
 
 # --- 1. SYSTEM PREP ---
-status "Stopping services..."
+header "System Preparation"
+info "Stopping services..."
 systemctl stop duetcontrolserver duetwebserver duetpluginservice duetruntime 2>/dev/null
 
-status "Reloading Daemon..."
+info "Reloading Daemon..."
 systemctl daemon-reload
 
-status "Remounting Filesystem as Read/Write..."
-mount -o remount,rw / || die "Failed to remount / as RW. Cannot proceed."
+info "Remounting Filesystem as Read/Write..."
+mount -o remount,rw / || error "Failed to remount / as RW. Cannot proceed."
 
 # --- 2. FETCH PACKAGE INDEX ---
+header "Fetching Packages"
 rm -rf "$WORK_DIR"
-mkdir -p "$WORK_DIR" && cd "$WORK_DIR" || die "Could not create temp dir."
+mkdir -p "$WORK_DIR" && cd "$WORK_DIR" || error "Could not create temp dir."
 
-status "Fetching package index from: $TARGET_URL"
+info "Downloading package index..."
 
-# Try downloading Packages.gz first (standard), then plain Packages
 if wget -q "${TARGET_URL}${PACKAGES_FILE}.gz" -O Packages.gz; then
-    status "Downloaded Packages.gz. Decompressing..."
+    info "Downloaded Packages.gz. Decompressing..."
     gunzip Packages.gz
 elif wget -q "${TARGET_URL}${PACKAGES_FILE}" -O Packages; then
-    status "Downloaded plain Packages file."
+    info "Downloaded plain Packages file."
 else
-    die "Failed to download package list. URL might be 404."
+    error "Failed to download package list. URL might be 404."
 fi
 
-if [ ! -s Packages ]; then die "The 'Packages' file is empty."; fi
-
-# DEBUG: Print the first 5 lines so you can see if we got the right file
-echo "------------------------------------------------"
-echo "DEBUG: First 5 lines of Packages file:"
-head -n 5 Packages
-echo "------------------------------------------------"
+if [ ! -s Packages ]; then error "The 'Packages' file is empty."; fi
 
 # --- 3. PARSE VERSIONS ---
 # Get all versions associated with duetcontrolserver
 VERSIONS=($(grep -A 10 "Package: duetcontrolserver" Packages | grep "Version:" | awk '{print $2}' | sort -V -r))
 
 if [ ${#VERSIONS[@]} -eq 0 ]; then 
-    echo "⚠️  Parser Warning: Could not find 'duetcontrolserver' block."
-    echo "   Trying to find ANY version strings..."
+    warn "Parser Warning: Could not find 'duetcontrolserver' block."
+    warn "Trying to find ANY version strings..."
     VERSIONS=($(grep "Version:" Packages | awk '{print $2}' | sort -V -r | uniq))
 fi
 
-if [ ${#VERSIONS[@]} -eq 0 ]; then die "No versions found in file."; fi
+if [ ${#VERSIONS[@]} -eq 0 ]; then error "No versions found in file."; fi
 
-PS3="Select version to install (Enter number): "
-select VER in "${VERSIONS[@]}"; do
-    if [[ -n "$VER" ]]; then TARGET_VER="$VER"; break; fi
-    echo "Invalid selection."
+header "Select Version"
+i=1
+for val in "${VERSIONS[@]}"; do
+    echo -e "  $i) $val"
+    ((i++))
 done
-status "Selected Version: $TARGET_VER"
+echo ""
+
+while true; do
+    read -p "Select version to install [1-${#VERSIONS[@]}]: " v_choice
+    if [[ "$v_choice" =~ ^[0-9]+$ ]] && [ "$v_choice" -ge 1 ] && [ "$v_choice" -le "${#VERSIONS[@]}" ]; then
+         TARGET_VER="${VERSIONS[$((v_choice-1))]}"
+         break
+    else
+         echo -e "${RED}Invalid selection.${RESET}"
+    fi
+done
+
+info "Selected Version: ${BOLD}$TARGET_VER${RESET}"
 
 # --- 4. IDENTIFY PACKAGES ---
 declare -A INSTALL_LIST
-
-# Simple Block Parser
-# Reads the file line by line. When it finds a matching version block, saves the file.
 while read -r line; do
     if [[ "$line" =~ ^Package:\ (.*) ]]; then CURRENT_PKG="${BASH_REMATCH[1]}"; fi
     if [[ "$line" =~ ^Version:\ (.*) ]]; then CURRENT_VER="${BASH_REMATCH[1]}"; fi
     if [[ "$line" =~ ^Filename:\ (.*) ]]; then CURRENT_FILE="${BASH_REMATCH[1]}"; 
-        # Check if this block matches our selected version
         if [[ "$CURRENT_VER" == "$TARGET_VER" ]]; then
-            # Exclude firmware
             if [[ "$CURRENT_PKG" != "reprapfirmware" && -n "$CURRENT_PKG" ]]; then
                 INSTALL_LIST["$CURRENT_PKG"]="$CURRENT_FILE"
             fi
@@ -187,38 +198,30 @@ while read -r line; do
     fi
 done < Packages
 
-if [ ${#INSTALL_LIST[@]} -eq 0 ]; then die "No packages found for version $TARGET_VER"; fi
+if [ ${#INSTALL_LIST[@]} -eq 0 ]; then error "No packages found for version $TARGET_VER"; fi
 
-echo "------------------------------------------------"
-echo "Found ${#INSTALL_LIST[@]} packages to overwrite."
+info "Found ${#INSTALL_LIST[@]} packages to overwrite."
 read -p "Proceed with overwrite? [y/N] " -n 1 -r
 echo
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then die "Aborted."; fi
+if [[ ! $REPLY =~ ^[Yy]$ ]]; then error "Aborted."; fi
 
-# --- 5. EXECUTION (OVERWRITE) ---
+# --- 5. EXECUTION ---
+header "Installing Updates"
 
 for pkg in "${!INSTALL_LIST[@]}"; do
     FILE_PATH="${INSTALL_LIST[$pkg]}"
-    
-    # URL CONSTRUCTION LOGIC
-    # If the filename in the file is just "duetcontrolserver.deb", append to TARGET_URL
-    # If it is "pool/main/...", prepend https://pkg.duet3d.com
     if [[ "$FILE_PATH" == pool/* ]] || [[ "$FILE_PATH" == dists/* ]]; then
         FULL_URL="https://pkg.duet3d.com/${FILE_PATH}"
     else
-        # Remove any leading ./
         CLEAN_PATH="${FILE_PATH#./}"
         FULL_URL="${TARGET_URL}${CLEAN_PATH}"
     fi
 
     DEB_NAME="$(basename "$FILE_PATH")"
-    status "Downloading $pkg..."
-    # echo "DEBUG URL: $FULL_URL"
-    wget -q --show-progress "$FULL_URL" -O "$DEB_NAME" || die "Failed download."
+    info "Downloading $pkg..."
+    wget -q --show-progress "$FULL_URL" -O "$DEB_NAME" || error "Failed download."
 
-    status "Extracting & Overwriting..."
-    
-    # Extract
+    info "Extracting & Overwriting..."
     if command -v ar &> /dev/null; then 
         ar x "$DEB_NAME" data.tar.xz 2>/dev/null || ar x "$DEB_NAME" data.tar.gz 2>/dev/null
     else 
@@ -227,23 +230,24 @@ for pkg in "${!INSTALL_LIST[@]}"; do
     
     if [ -f "data.tar.xz" ]; then ARCHIVE="data.tar.xz"; 
     elif [ -f "data.tar.gz" ]; then ARCHIVE="data.tar.gz"; 
-    else die "Bad .deb format (no data.tar)"; fi
+    else error "Bad .deb format (no data.tar)"; fi
 
-    # OVERWRITE DIRECTLY TO /
     tar -xf "$ARCHIVE" -C /
-    
     rm -f "$DEB_NAME" "$ARCHIVE" control.tar.* debian-binary
+    success "Installed $pkg"
 done
 
 # --- 6. FINISH ---
-status "Fixing Permissions..."
+header "Finalizing"
+info "Fixing Permissions..."
 if id "dsf" &>/dev/null; then chown -R dsf:dsf /opt/dsf; fi
 chmod +x /opt/dsf/bin/* 2>/dev/null
 
-status "Syncing..."
+info "Syncing filesystem..."
 sync
 
-status "Restarting Services..."
+info "Restarting Services..."
 systemctl start duetcontrolserver duetwebserver duetpluginservice
 
-status "Update Complete."
+header "Complete"
+success "Fly-FastOS DSF Update Finished Successfully!"
