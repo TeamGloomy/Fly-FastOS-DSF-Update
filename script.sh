@@ -22,7 +22,7 @@ self_update() {
         fi
 
         # Extract new version
-        NEW_VER=$(grep "^VERSION" "$TMP_FILE" | awk -F'[="]' '{print $3}')
+        NEW_VER=$(grep "^VERSION" "$TMP_FILE" | awk -F'[="]' '{print $3}' | tr -d '\r')
         
         # Check if version was found
         if [ -z "$NEW_VER" ]; then
@@ -34,21 +34,27 @@ self_update() {
         ABS_SCRIPT_PATH=$(readlink -f "$SCRIPT_LOCATION")
         
         # Compare versions
-        if [ "$VERSION" \< "$NEW_VER" ]; then
-            printf "Updating script \e[31;1m%s\e[0m -> \e[32;1m%s\e[0m\n" "$VERSION" "$NEW_VER"
+        if [[ "$VERSION" != "$NEW_VER" ]]; then
+            if [[ "$VERSION" < "$NEW_VER" ]]; then
+                printf "Updating script \e[31;1m%s\e[0m -> \e[32;1m%s\e[0m\n" "$VERSION" "$NEW_VER"
 
-            # Create transient updater script
-            echo "#!/bin/bash" > "$SELF_UPDATER_SCRIPT"
-            echo "cp \"$TMP_FILE\" \"$ABS_SCRIPT_PATH\"" >> "$SELF_UPDATER_SCRIPT"
-            echo "rm -f \"$TMP_FILE\"" >> "$SELF_UPDATER_SCRIPT"
-            echo "echo 'Running updated script...'" >> "$SELF_UPDATER_SCRIPT"
-            echo "exec \"$ABS_SCRIPT_PATH\" \"\$@\"" >> "$SELF_UPDATER_SCRIPT"
+                # Create transient updater script
+                echo "#!/bin/bash" > "$SELF_UPDATER_SCRIPT"
+                echo "cp \"$TMP_FILE\" \"$ABS_SCRIPT_PATH\"" >> "$SELF_UPDATER_SCRIPT"
+                echo "rm -f \"$TMP_FILE\"" >> "$SELF_UPDATER_SCRIPT"
+                echo "echo 'Running updated script...'" >> "$SELF_UPDATER_SCRIPT"
+                echo "exec \"$ABS_SCRIPT_PATH\" \"\$@\"" >> "$SELF_UPDATER_SCRIPT"
 
-            chmod +x "$SELF_UPDATER_SCRIPT"
-            chmod +x "$TMP_FILE"
-            
-            # Execute updater and exit current process
-            exec "$SELF_UPDATER_SCRIPT"
+                chmod +x "$SELF_UPDATER_SCRIPT"
+                chmod +x "$TMP_FILE"
+                
+                # Execute updater and exit current process
+                exec "$SELF_UPDATER_SCRIPT"
+            else
+                 # Remote is older or same? (Should rarely happen if != check passed, implies remote is older)
+                 echo "Remote version ($NEW_VER) is not newer than current ($VERSION). Skipping."
+                 rm -f "$TMP_FILE"
+            fi
         else
             echo "Script is up-to-date ($VERSION). Continuing..."
             rm -f "$TMP_FILE"
