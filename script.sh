@@ -1,5 +1,5 @@
 #!/bin/bash
-VERSION="0.5.3"
+VERSION="0.5.4"
 
 # --- COLORS & STYLING ---
 RED='\033[0;31m'
@@ -187,6 +187,10 @@ while true; do
             info "Exiting..."
             exit 0
             ;;
+        5)
+            CHANNEL="Dev"
+            TARGET_URL="https://pkg.duet3d.com/dists/dev/armv7/binary-arm64/"
+            break;;
         *) echo -e "${RED}Invalid selection.${RESET}";;
     esac
 done
