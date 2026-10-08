@@ -1,5 +1,5 @@
 #!/bin/bash
-VERSION="0.5.4"
+VERSION="0.5.5"
 
 # --- COLORS & STYLING ---
 RED='\033[0;31m'
@@ -55,6 +55,26 @@ restore_config() {
         cp "$BACKUP_DIR/config.json" "$CONFIG_FILE"
         if id "dsf" &>/dev/null; then chown dsf:dsf "$CONFIG_FILE" 2>/dev/null; fi
     fi
+}
+
+enforce_usb_comms() {
+    # SPI is not supported on this hardware, so the comms mode must always be USB
+    if [ ! -f "$CONFIG_FILE" ]; then
+        warn "No configuration found at $CONFIG_FILE, cannot set communication method."
+        return
+    fi
+
+    local current=$(grep "^\s\+\"CommunicationMethod" "$CONFIG_FILE" | awk -F': "' '{print $2}' | tr -d '",')
+    if [ "$current" == "usb" ]; then
+        success "Communication method is already USB."
+        return
+    fi
+
+    info "Communication method is '${current:-unset}', setting to USB (SPI is not supported)..."
+    cp "$CONFIG_FILE" "$CONFIG_FILE.bak"
+    sed -i -e 's|"CommunicationMethod": .*,|"CommunicationMethod": "usb",|g' "$CONFIG_FILE"
+    if id "dsf" &>/dev/null; then chown dsf:dsf "$CONFIG_FILE" 2>/dev/null; fi
+    success "Communication method set to USB."
 }
 
 check_health() {
@@ -178,6 +198,7 @@ while true; do
             break;;
         3)
             header "Restarting Services"
+            enforce_usb_comms
             info "Restarting DuetControlServer..."
             systemctl restart duetcontrolserver duetwebserver duetpluginservice
             check_health
@@ -333,6 +354,7 @@ header "Finalizing"
 
 # RESTORE CONFIGURATION
 restore_config
+enforce_usb_comms
 
 info "Fixing Permissions..."
 if id "dsf" &>/dev/null; then chown -R dsf:dsf /opt/dsf; fi
